@@ -1,8 +1,9 @@
+use core::cell::UnsafeCell;
+
+
 use crate::{
-    mem_utils,
     memolayout::{PCI_BASE, VGA_FRAME_BUFFER, VGA_FRAME_BUFFER_SIZE, VGA_MMIO_BASE},
     println,
-    vm::kalloc,
 };
 
 pub const VENDOR_SPECIFIC: u8 = 0x09;
@@ -132,12 +133,10 @@ pub unsafe fn write_vga(addr: usize) {
     }
     let type0_header: &PCIConfigurationSpcaeHeaderType0 =
         &*((&csh.remain_part as *const u8) as u64 as *const PCIConfigurationSpcaeHeaderType0);
-    let bar_0: &mut u32 =
-        &mut *(&type0_header.base_address_registers as *const u8 as u64 as *mut u32);
-    let bar_2: &mut u32 =
-        &mut *((&type0_header.base_address_registers as *const u8 as u64 + 4 * 2) as *mut u32);
-    let bar_6: &mut u32 =
-        &mut *((&type0_header.base_address_registers as *const u8 as u64 + 4 * 5) as *mut u32);
+    let bar_base_addr: UnsafeCell<u32> = (type0_header.base_address_registers[0] as u32).into();
+    let bar_0: *mut u32 = bar_base_addr.get();
+    let bar_2: *mut u32 = bar_base_addr.get().wrapping_add(2);
+    // let bar_6: *mut u32 = bar_base_addr.get().wrapping_add(5);//why 5? not 6?
     let bar_0_val = VGA_FRAME_BUFFER;
     *bar_0 = bar_0_val as u32;
     *bar_2 = VGA_MMIO_BASE as u32;
@@ -173,9 +172,7 @@ pub fn test_write_bar() {
         msix_enable |= 1 << 15;
         *((capability_struct_addr + 2) as *mut u16) = msix_enable;
     };
-    unsafe {
-        header_t.command = 6;
-    }
+    header_t.command = 6;
     println!("cap_id: {:?}", unsafe {
         *(capability_struct_addr as *const u8)
     });
@@ -195,12 +192,13 @@ pub fn test_write_bar() {
 pub fn test_bar(){
     let config_addr = find_device(PCI_BASE, 0x1af4, 0x1050).expect("can't find pci device");
     let header = unsafe { &*(config_addr as *mut PCIConfigurationSpcaeHeaderType0) };
-    let bar0 = &header.base_address_registers[0] as *const u8 as *mut u32;
-    let bar1 = &header.base_address_registers[4] as *const u8 as *mut u32;
-    let bar2 = &header.base_address_registers[8] as *const u8 as *mut u32;
-    let bar3 = &header.base_address_registers[12] as *const u8 as *mut u32;
-    let bar4 = &header.base_address_registers[16] as *const u8 as *mut u32;
-    let bar5 = &header.base_address_registers[20] as *const u8 as *mut u32;
+    let bar_base_addr: UnsafeCell<u32> = (header.base_address_registers[0] as u32).into();
+    let bar0 = bar_base_addr.get();
+    let bar1 = bar_base_addr.get().wrapping_add(1);
+    let bar2 = bar_base_addr.get().wrapping_add(2);
+    let bar3 = bar_base_addr.get().wrapping_add(3);
+    let bar4 = bar_base_addr.get().wrapping_add(4); 
+    let bar5 = bar_base_addr.get().wrapping_add(5);
     unsafe {
         *bar1 = 0xffff_ffff;
         let r = *bar1;
@@ -210,9 +208,6 @@ pub fn test_bar(){
         *bar4 = 0xffff_ffff;
         let r = *bar4;
         println!("bar4 size: {}", (!r).wrapping_add(1));
-    }
-    unsafe{
-        // *bar1 = PCI_BASE as u32;//4K
     }
     unsafe{
         *bar4 = VGA_FRAME_BUFFER as u32 + 0x1000;
