@@ -109,6 +109,7 @@ pub fn disp_cap_list(config_addr: usize, cap_pointer: usize) {
 }
 
 pub fn find_device(pci_base_addr: usize, vendor_id: u16, device_id: u16) -> Option<usize> {
+    // assume all pci device is in bus 0
     for dev_num in 0..(1 << 5) {
         for func_num in 0..(1 << 3) {
             let config_space_addr = pci_base_addr + (dev_num << (12 + 3)) + (func_num << 12);
