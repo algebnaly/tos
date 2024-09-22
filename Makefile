@@ -8,6 +8,7 @@ run:
 		-bios none \
 		-global virtio-mmio.force-legacy=false \
 		-device virtio-vga \
+		-device edu \
 		-drive file=target/fs.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		-kernel target/riscv64gc-unknown-none-elf/debug/tos
@@ -22,6 +23,7 @@ debug:
 		-bios none \
 		-global virtio-mmio.force-legacy=false \
 		-device virtio-vga \
+		-device edu \
 		-drive file=target/fs.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		-kernel target/riscv64gc-unknown-none-elf/debug/tos \

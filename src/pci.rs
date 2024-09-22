@@ -191,6 +191,9 @@ pub fn test_write_bar() {
 
 pub fn test_bar(){
     let config_addr = find_device(PCI_BASE, 0x1af4, 0x1050).expect("can't find pci device");
+    println!("found Virtio GPU");
+    let config_addr2 = find_device(PCI_BASE, 0x1234, 0x11e8).expect("can't find edu pci device");
+    println!("found PCI EDU device");
     let header = unsafe { &*(config_addr as *mut PCIConfigurationSpcaeHeaderType0) };
     let bar_base_addr: UnsafeCell<u32> = (header.base_address_registers[0] as u32).into();
     let bar0 = bar_base_addr.get();
