@@ -1,6 +1,7 @@
 use core::{cell::UnsafeCell, hint::black_box};
 
 use msix::{set_all_msix_interrupt_handler, MSIXCapability};
+use virtio::VirtioPciCommonCfg;
 
 use crate::{
     memolayout::{PCI_BASE, VGA_FRAME_BUFFER, VGA_FRAME_BUFFER_SIZE, VGA_MMIO_BASE},
@@ -216,13 +217,11 @@ pub fn test_bar() {
     // traverse_cap_list(config_addr, header.capabilities_pointer as usize);
 
     // traverse_cap_list(config_addr_sound, header_sound.capabilities_pointer as usize);
-    
+
     let cap_pointer_sound = header_sound.capabilities_pointer as usize;
-    enable_msix(
-        config_addr_sound,
-        cap_pointer_sound
-    );
-    
+    enable_device(config_addr_sound as usize);
+    enable_msix(config_addr_sound, cap_pointer_sound);
+
     start_virtio_sound_config(config_addr_sound);
 
     // println!("command register: {:x}", header_t.command);
@@ -310,26 +309,37 @@ fn enable_msix_inner(config_addr: usize, msix_cap_pointer: usize) {
     println!("table offset: {:?}", table_offset);
     println!("pba offset: {:?}", pba_offset);
 
-    println!("table bar content{}: ",get_bar_value(config_addr, table_bar as usize));
-    println!("pba bar content{}: ",get_bar_value(config_addr, pba_bar as usize));
-    
+    println!(
+        "table bar content{}: ",
+        get_bar_value(config_addr, table_bar as usize)
+    );
+    println!(
+        "pba bar content{}: ",
+        get_bar_value(config_addr, pba_bar as usize)
+    );
+
     let bar_content = 0x4001_0000;
     let table_addr = bar_content + table_offset;
-    let pba_addr = bar_content+ pba_offset;
-    
+    let pba_addr = bar_content + pba_offset;
+
     let table_size = msix_cap.table_size();
-    
+
     if table_bar == pba_bar {
         set_bar_value(config_addr, table_bar as usize, bar_content);
-    }else{
+    } else {
         panic!("not implemented");
     }
-    println!("table bar content: {:#x}: ",get_bar_value(config_addr, table_bar as usize));
-    println!("pba bar content: {:#x}: ",get_bar_value(config_addr, pba_bar as usize));
+    println!(
+        "table bar content: {:#x}: ",
+        get_bar_value(config_addr, table_bar as usize)
+    );
+    println!(
+        "pba bar content: {:#x}: ",
+        get_bar_value(config_addr, pba_bar as usize)
+    );
     set_all_msix_interrupt_handler(table_addr as usize, table_size as usize);
-    
+
     msix_cap.set_enable(true);
-    
 }
 fn get_bar_value(config_addr: usize, bar: usize) -> u32 {
     let header = unsafe { &mut *(config_addr as *mut PCIConfigurationSpcaeHeaderType0) };
@@ -345,33 +355,52 @@ fn set_bar_value(config_addr: usize, bar: usize, value: u32) {
     unsafe { *bar0.wrapping_add(bar) = value };
 }
 
-pub fn start_virtio_sound_config(config_addr: usize){
+pub fn start_virtio_sound_config(config_addr: usize) {
     let header = unsafe { &mut *(config_addr as *mut PCIConfigurationSpcaeHeaderType0) };
+    let header_t = unsafe { &mut *(config_addr as *mut PCIConfigurationSpcaeHeader) };
     let bar_base_addr = black_box(&(header.base_address_registers[0]) as *const u8 as usize);
     let mut next_cap_pointer = header.capabilities_pointer as usize;
     let mut bar: Option<usize> = None;
     let mut offset: Option<usize> = None;
     loop {
         let cap = unsafe { &*((config_addr + next_cap_pointer) as *const VirtioPciCap) };
-        
+
         if cap.cap_vndr == VENDOR_SPECIFIC && cap.cfg_type == 0x01 {
             bar = Some(cap.bar as usize);
             offset = Some(cap.offset as usize);
             break;
         }
-        
+
         if cap.cap_next == 0 {
             println!("did not find common cfg struct");
             return;
         }
         next_cap_pointer = cap.cap_next as usize;
     }
+    
+    println!("sound card cap pointer:");
     let bar_content = 0x4000_0000;
+    println!("status: {}", header_t.status);
     println!("bar: {}", bar.unwrap());
     println!("offset: {}", offset.unwrap());
     set_bar_value(config_addr, bar.unwrap(), bar_content);
-    println!("bar content: {:#x}: ",get_bar_value(config_addr, bar.unwrap()));
+    println!(
+        "bar content: {:#x}: ",
+        get_bar_value(config_addr, bar.unwrap())
+    );
     
+    let common_cfg_addr = bar_content as usize + offset.unwrap() as usize;
+    println!("common cfg addr: {:#x}", common_cfg_addr);
+    let common_cfg = unsafe { &mut *(common_cfg_addr as *mut VirtioPciCommonCfg) };
+    println!("common cfg: {:?}", common_cfg);
+    
+}
+
+pub fn enable_device(config_addr: usize) {
+    let header_t = unsafe { &mut *(config_addr as *mut PCIConfigurationSpcaeHeader) };
+    header_t.command = header_t.command | 0b100;//enable mastering enable bit
+    header_t.command = header_t.command | 0b10;//enable mmory space enable bit
+    println!("command register: {:x}", header_t.command);
 }
 
 #[repr(C)]
@@ -402,4 +431,3 @@ struct PCIECapability {
     slot_control2: u16,
     slot_status2: u16,
 }
-

@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct VirtioPciCommonCfg {
     device_feature_select: u32,
     device_feature: u32,
