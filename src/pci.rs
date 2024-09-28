@@ -1,7 +1,7 @@
 use core::{cell::UnsafeCell, hint::black_box};
 
 use msix::{set_all_msix_interrupt_handler, MSIXCapability};
-use virtio::VirtioPciCommonCfg;
+use virtio::{virtio_pci_device_reset, VirtioPciCommonCfg};
 
 use crate::{
     memolayout::{PCI_BASE, VGA_FRAME_BUFFER, VGA_FRAME_BUFFER_SIZE, VGA_MMIO_BASE},
@@ -377,9 +377,9 @@ pub fn start_virtio_sound_config(config_addr: usize) {
         }
         next_cap_pointer = cap.cap_next as usize;
     }
-    
+
     println!("sound card cap pointer:");
-    let bar_content = 0x4000_0000;
+    let bar_content = 0x4100_0000;
     println!("status: {}", header_t.status);
     println!("bar: {}", bar.unwrap());
     println!("offset: {}", offset.unwrap());
@@ -388,18 +388,29 @@ pub fn start_virtio_sound_config(config_addr: usize) {
         "bar content: {:#x}: ",
         get_bar_value(config_addr, bar.unwrap())
     );
-    
+    println!("status: {}", header_t.status);
+
     let common_cfg_addr = bar_content as usize + offset.unwrap() as usize;
     println!("common cfg addr: {:#x}", common_cfg_addr);
     let common_cfg = unsafe { &mut *(common_cfg_addr as *mut VirtioPciCommonCfg) };
     println!("common cfg: {:?}", common_cfg);
-    
+    virtio_pci_device_reset(common_cfg);
+    common_cfg.device_status |= virtio::DEVICE_STATUS_ACKNOWLEDGE;
+    println!("common cfg: {:?}", common_cfg);
+    common_cfg.device_status |= virtio::DEVICE_STATUS_DRIVER;
+    println!("common cfg: {:?}", common_cfg);
+    common_cfg.device_status |= virtio::DEVICE_STATUS_FEATURES_OK;
+    println!("common cfg: {:?}", common_cfg);
+}
+
+pub fn get_bar_region_size(config_addr: usize, bar: usize) -> usize {
+    0
 }
 
 pub fn enable_device(config_addr: usize) {
     let header_t = unsafe { &mut *(config_addr as *mut PCIConfigurationSpcaeHeader) };
-    header_t.command = header_t.command | 0b100;//enable mastering enable bit
-    header_t.command = header_t.command | 0b10;//enable mmory space enable bit
+    header_t.command = header_t.command | 0b100; //enable mastering enable bit
+    header_t.command = header_t.command | 0b10; //enable mmory space enable bit
     println!("command register: {:x}", header_t.command);
 }
 
