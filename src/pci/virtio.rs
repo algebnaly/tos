@@ -7,6 +7,7 @@ pub const DEVICE_STATUS_NEEDS_RESET: u8 = 0x40; // 64
 
 
 #[derive(Debug)]
+#[repr(C, packed)]
 pub struct VirtioPciCommonCfg {
     pub device_feature_select: u32,
     pub device_feature: u32,

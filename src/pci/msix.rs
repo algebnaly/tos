@@ -1,6 +1,6 @@
 use crate::println;
 
-#[repr(C)]
+#[repr(C, packed)]
 #[derive(Debug)]
 pub struct MSIXCapability {
     pub msix_cap_id: u8,
@@ -40,6 +40,7 @@ impl MSIXCapability {
     }
 }
 
+#[repr(C, packed)]
 pub struct MSIXTableEntry {
     pub message_address: u32,
     pub message_address_high: u32,

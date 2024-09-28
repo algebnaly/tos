@@ -7,12 +7,11 @@ run:
 		-m 128M \
 		-bios none \
 		-global virtio-mmio.force-legacy=false \
-		-device virtio-vga \
-		-device edu \
-		-audio driver=pa,model=virtio \
 		-drive file=target/fs.img,if=none,format=raw,id=x0 \
+		-device virtio-rng-pci \
 		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		-kernel target/riscv64gc-unknown-none-elf/debug/tos
+	
 
 debug:
 	cargo build

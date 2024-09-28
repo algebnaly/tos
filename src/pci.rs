@@ -14,7 +14,7 @@ mod virtio;
 pub const VENDOR_SPECIFIC: u8 = 0x09;
 pub const MIS_X: u8 = 0x11;
 #[derive(Debug)]
-#[repr(C)]
+#[repr(C, packed)]
 struct PCIConfigurationSpcaeHeader {
     pub vendor_id: u16,
     pub device_id: u16,
@@ -29,7 +29,7 @@ struct PCIConfigurationSpcaeHeader {
     pub remain_part: [u8; 240],
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 pub struct PCIConfigurationSpcaeHeaderType0 {
     pub __padding: [u8; 16],
     pub base_address_registers: [u8; 24],
@@ -46,7 +46,7 @@ pub struct PCIConfigurationSpcaeHeaderType0 {
 }
 
 #[derive(Debug)]
-#[repr(C)]
+#[repr(C, packed)]
 pub struct VirtioPciCap {
     pub cap_vndr: u8,
     pub cap_next: u8,
@@ -60,7 +60,7 @@ pub struct VirtioPciCap {
 }
 
 #[derive(Debug)]
-#[repr(C)]
+#[repr(C, packed)]
 pub struct CapHeader {
     pub cap_id: u8,
     pub cap_next: u8,
@@ -204,32 +204,27 @@ pub fn test_write_bar() {
 }
 
 pub fn test_bar() {
-    // let config_addr = find_device(PCI_BASE, 0x1af4, 0x1050).expect("can't find pci device");
-    // println!("found Virtio GPU: {:#x}", config_addr);
-    let config_addr_sound =
-        find_device(PCI_BASE, 0x1af4, 0x1040 + 25).expect("can't find pci device");
-    println!("found Virtio SOUND: {:#x}", config_addr_sound);
-    // let config_addr2 = find_device(PCI_BASE, 0x1234, 0x11e8).expect("can't find edu pci device");
-    // println!("found PCI EDU device: {:#x}", config_addr2);
-    let header = unsafe { &mut *(config_addr_sound as *mut PCIConfigurationSpcaeHeaderType0) };
-    let header_sound =
-        unsafe { &mut *(config_addr_sound as *mut PCIConfigurationSpcaeHeaderType0) };
-    // traverse_cap_list(config_addr, header.capabilities_pointer as usize);
+    let config_addr_entropy =
+        match find_device(PCI_BASE, 0x1af4, 0x1040 + 4){
+            Some(c) => c,
+            None => {
+                find_device(PCI_BASE, 0x1af4, 0x1005).expect("cannot found entropy device.")
+            }
+        };
+    
+    println!("found Entropy device: {:#x}", config_addr_entropy);
+    let header = unsafe { &mut *(config_addr_entropy as *mut PCIConfigurationSpcaeHeaderType0) };
+    let header_entropy =
+        unsafe { &mut *(config_addr_entropy as *mut PCIConfigurationSpcaeHeaderType0) };
+    traverse_cap_list(config_addr_entropy, header.capabilities_pointer as usize);
 
-    // traverse_cap_list(config_addr_sound, header_sound.capabilities_pointer as usize);
+    let cap_pointer_entropy = header_entropy.capabilities_pointer as usize;
+    enable_device(config_addr_entropy as usize);
+    enable_msix(config_addr_entropy, cap_pointer_entropy);
 
-    let cap_pointer_sound = header_sound.capabilities_pointer as usize;
-    enable_device(config_addr_sound as usize);
-    enable_msix(config_addr_sound, cap_pointer_sound);
-
-    start_virtio_sound_config(config_addr_sound);
-
-    // println!("command register: {:x}", header_t.command);
-    // header_t.command = header_t.command | 0b100;//enable mastering enable bit
-    // println!("command register: {:x}", header_t.command);
-
+    start_virtio_entropy_config(config_addr_entropy);
     let bar_base_addr = black_box(&(header.base_address_registers[0]) as *const u8 as usize);
-    traverse_cap_list(config_addr_sound, cap_pointer_sound);
+    traverse_cap_list(config_addr_entropy, cap_pointer_entropy);
     let bar0 = bar_base_addr as *mut u32;
     let bar2 = bar0.wrapping_add(2);
 }
@@ -355,13 +350,12 @@ fn set_bar_value(config_addr: usize, bar: usize, value: u32) {
     unsafe { *bar0.wrapping_add(bar) = value };
 }
 
-pub fn start_virtio_sound_config(config_addr: usize) {
+pub fn start_virtio_entropy_config(config_addr: usize) {
     let header = unsafe { &mut *(config_addr as *mut PCIConfigurationSpcaeHeaderType0) };
     let header_t = unsafe { &mut *(config_addr as *mut PCIConfigurationSpcaeHeader) };
-    let bar_base_addr = black_box(&(header.base_address_registers[0]) as *const u8 as usize);
     let mut next_cap_pointer = header.capabilities_pointer as usize;
-    let mut bar: Option<usize> = None;
-    let mut offset: Option<usize> = None;
+    let bar: Option<usize>;
+    let offset: Option<usize>;
     loop {
         let cap = unsafe { &*((config_addr + next_cap_pointer) as *const VirtioPciCap) };
 
@@ -378,7 +372,7 @@ pub fn start_virtio_sound_config(config_addr: usize) {
         next_cap_pointer = cap.cap_next as usize;
     }
 
-    println!("sound card cap pointer:");
+    println!("entropy card cap pointer:");
     let bar_content = 0x4100_0000;
     println!("status: {}", header_t.status);
     println!("bar: {}", bar.unwrap());
@@ -414,7 +408,7 @@ pub fn enable_device(config_addr: usize) {
     println!("command register: {:x}", header_t.command);
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 #[derive(Debug)]
 struct PCIECapability {
     pcie_cap_id: u8,
