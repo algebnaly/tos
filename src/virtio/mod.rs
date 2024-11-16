@@ -1,4 +1,6 @@
 use crate::mem_utils::memset;
+use crate::memolayout::PCI_BASE;
+use crate::pci::find_device;
 // use crate::println;
 use crate::riscv::PGSIZE;
 use crate::virtio::virtio_blk::{VirtqAvail, VirtqDesc, VirtqUsed, QUEUE_NUM};
@@ -155,12 +157,15 @@ pub fn init_virtio_blk_device(dev_addr: *const u8) {
     dev_reg_ref.queue_ready = 0x1;
 
     // ALL NUM descriptors start out unused
-    for i in 0..QUEUE_NUM{
+    for i in 0..QUEUE_NUM {
         disk_ref.free[i] = false;
     }
 
     status |= STATUS_DRIVER_OK;
     dev_reg_ref.status = status;
     // plic.rs and trap.rs arrange for interrupts from VIRTIO0_IRQ.
+}
 
+pub fn find_virtio_device(virtio_device_id: u16) -> Option<usize> {
+    find_device(PCI_BASE, 0x1af4, 0x1040 + virtio_device_id)
 }

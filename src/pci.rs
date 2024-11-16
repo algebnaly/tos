@@ -1,11 +1,12 @@
 use core::{cell::UnsafeCell, hint::black_box};
 
 use msix::{set_all_msix_interrupt_handler, MSIXCapability};
-use virtio::{virtio_pci_device_reset, VirtioPciCommonCfg};
+use virtio::{virtio_pci_device_reset, VirtioPciCommonCfg, DEVICE_STATUS_ACKNOWLEDGE, DEVICE_STATUS_DRIVER, VIRTIO_PCI_CAP_COMMON_CFG};
 
 use crate::{
     memolayout::{PCI_BASE, VGA_FRAME_BUFFER, VGA_FRAME_BUFFER_SIZE, VGA_MMIO_BASE},
     println,
+    virtio::find_virtio_device,
 };
 
 mod msix;
@@ -14,7 +15,7 @@ mod virtio;
 pub const VENDOR_SPECIFIC: u8 = 0x09;
 pub const MIS_X: u8 = 0x11;
 #[derive(Debug)]
-#[repr(C, packed)]
+#[repr(C)]
 struct PCIConfigurationSpcaeHeader {
     pub vendor_id: u16,
     pub device_id: u16,
@@ -29,7 +30,7 @@ struct PCIConfigurationSpcaeHeader {
     pub remain_part: [u8; 240],
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 pub struct PCIConfigurationSpcaeHeaderType0 {
     pub __padding: [u8; 16],
     pub base_address_registers: [u8; 24],
@@ -46,7 +47,7 @@ pub struct PCIConfigurationSpcaeHeaderType0 {
 }
 
 #[derive(Debug)]
-#[repr(C, packed)]
+#[repr(C)]
 pub struct VirtioPciCap {
     pub cap_vndr: u8,
     pub cap_next: u8,
@@ -60,7 +61,7 @@ pub struct VirtioPciCap {
 }
 
 #[derive(Debug)]
-#[repr(C, packed)]
+#[repr(C)]
 pub struct CapHeader {
     pub cap_id: u8,
     pub cap_next: u8,
@@ -204,29 +205,91 @@ pub fn test_write_bar() {
 }
 
 pub fn test_bar() {
-    let config_addr_entropy =
-        match find_device(PCI_BASE, 0x1af4, 0x1040 + 4){
-            Some(c) => c,
-            None => {
-                find_device(PCI_BASE, 0x1af4, 0x1005).expect("cannot found entropy device.")
+    let config_addr_sound = match find_virtio_device(25) {
+        Some(c) => c,
+        None => {
+            panic!("can't find virtio sound device");
+        }
+    };
+
+    println!("found virtio sound device: {:#x}", config_addr_sound);
+    let header = unsafe { &mut *(config_addr_sound as *mut PCIConfigurationSpcaeHeaderType0) };
+    let header_common = unsafe { &mut *(config_addr_sound as *mut PCIConfigurationSpcaeHeader) };
+    println!("status: {:?}", header_common.status & 0b10000);
+    let header_sound =
+        unsafe { &mut *(config_addr_sound as *mut PCIConfigurationSpcaeHeaderType0) };
+    traverse_cap_list(config_addr_sound, header.capabilities_pointer as usize);
+
+    let cap_pointer_sound = header_sound.capabilities_pointer as usize;
+
+    enable_device(config_addr_sound as usize);
+    let mut next_cap_pointer = cap_pointer_sound;
+    loop {
+        let cap = unsafe { &*((config_addr_sound + next_cap_pointer) as *const CapHeader) };
+        if cap.cap_id == VENDOR_SPECIFIC {
+            let pci_cap =
+                unsafe { &*((config_addr_sound + next_cap_pointer) as *const VirtioPciCap) };
+            if pci_cap.cfg_type == VIRTIO_PCI_CAP_COMMON_CFG {
+                let bar = pci_cap.bar as usize;
+                println!(
+                    "pci cap common cfg bar: {:x?}",
+                    get_bar_value(config_addr_sound, bar)
+                );
+                set_bar_value(config_addr_sound, bar, 0x4002_0000);
+                println!(
+                    "pci cap common cfg bar: {:x?}",
+                    get_bar_value(config_addr_sound, bar)
+                );
+                let common_cfg = unsafe { &mut *(0x4002_0000 as *mut VirtioPciCommonCfg) };
+                common_cfg.device_status = 0; //reset device
+                common_cfg.device_status = DEVICE_STATUS_ACKNOWLEDGE;
+                common_cfg.device_status = DEVICE_STATUS_DRIVER;
+                let features = common_cfg.device_feature;
+                println!("features: {:x?}", features);
+                // set feature bit here
             }
-        };
-    
-    println!("found Entropy device: {:#x}", config_addr_entropy);
-    let header = unsafe { &mut *(config_addr_entropy as *mut PCIConfigurationSpcaeHeaderType0) };
-    let header_entropy =
-        unsafe { &mut *(config_addr_entropy as *mut PCIConfigurationSpcaeHeaderType0) };
-    traverse_cap_list(config_addr_entropy, header.capabilities_pointer as usize);
+        }
+        if cap.cap_next == 0 {
+            break;
+        }
+        next_cap_pointer = cap.cap_next as usize;
+    }
 
-    let cap_pointer_entropy = header_entropy.capabilities_pointer as usize;
-    enable_device(config_addr_entropy as usize);
-    enable_msix(config_addr_entropy, cap_pointer_entropy);
+    enable_sound_msix(config_addr_sound, cap_pointer_sound);
+    next_cap_pointer = cap_pointer_sound;
+    loop {
+        let cap = unsafe { &*((config_addr_sound + next_cap_pointer) as *const CapHeader) };
+        if cap.cap_id == VENDOR_SPECIFIC {
+            let pci_cap =
+                unsafe { &*((config_addr_sound + next_cap_pointer) as *const VirtioPciCap) };
+            if pci_cap.cfg_type == VIRTIO_PCI_CAP_COMMON_CFG {
+                let common_cfg = unsafe { &mut *(0x4002_0000 as *mut VirtioPciCommonCfg) };
+                println!("num queues: {:?}", common_cfg.num_queues);
+                for i in 0..common_cfg.num_queues {
+                    common_cfg.queue_select = i as u16;
+                    common_cfg.config_msix_vector = 0;
+                    common_cfg.queue_msix_vector = 1;
+                    
+                    println!("queue enabled: {:?}", common_cfg.queue_enable);
+                    common_cfg.queue_enable = 1;
+                    println!("queue enabled: {:?}", common_cfg.queue_enable);
+                    // loop{}
+                }
+            }
+        }
+        if cap.cap_next == 0 {
+            break;
+        }
+        next_cap_pointer = cap.cap_next as usize;
+    }
 
-    start_virtio_entropy_config(config_addr_entropy);
-    let bar_base_addr = black_box(&(header.base_address_registers[0]) as *const u8 as usize);
-    traverse_cap_list(config_addr_entropy, cap_pointer_entropy);
-    let bar0 = bar_base_addr as *mut u32;
-    let bar2 = bar0.wrapping_add(2);
+    // enable_msix(config_addr_entropy, cap_pointer_entropy);
+
+    // start_virtio_entropy_config(config_addr_entropy);
+    // let bar_base_addr = black_box(&(header.base_address_registers[0]) as *const u8 as usize);
+    // traverse_cap_list(config_addr_entropy, cap_pointer_entropy);
+    // let bar0 = bar_base_addr as *mut u32;
+    // let bar2 = bar0.wrapping_add(2);
 }
 
 struct StatusRegister(u16);
@@ -318,6 +381,7 @@ fn enable_msix_inner(config_addr: usize, msix_cap_pointer: usize) {
     let pba_addr = bar_content + pba_offset;
 
     let table_size = msix_cap.table_size();
+    println!("table size: {}", table_size);
 
     if table_bar == pba_bar {
         set_bar_value(config_addr, table_bar as usize, bar_content);
@@ -408,7 +472,7 @@ pub fn enable_device(config_addr: usize) {
     println!("command register: {:x}", header_t.command);
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug)]
 struct PCIECapability {
     pcie_cap_id: u8,
@@ -435,4 +499,19 @@ struct PCIECapability {
     slot_capabilities2: u32,
     slot_control2: u16,
     slot_status2: u16,
+}
+
+pub fn enable_sound_msix(config_addr: usize, cap_pointer: usize) {
+    let mut next_cap_pointer = cap_pointer;
+    loop {
+        let cap = unsafe { &*((config_addr + next_cap_pointer) as *const CapHeader) };
+        if cap.cap_id == MIS_X {
+            println!("found msix cap: {:?}", next_cap_pointer);
+            enable_msix_inner(config_addr, next_cap_pointer);
+        }
+        if cap.cap_next == 0 {
+            break;
+        }
+        next_cap_pointer = cap.cap_next as usize;
+    }
 }

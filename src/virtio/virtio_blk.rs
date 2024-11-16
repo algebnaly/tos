@@ -124,7 +124,7 @@ pub fn list_feature(feature_bits: u32) {
     }
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 pub struct Disk {
     pub desc: *mut VirtqDesc,
     pub avail: *mut VirtqAvail,
@@ -137,7 +137,7 @@ pub struct Disk {
 
 unsafe impl Send for Disk {}
 
-#[repr(C, packed)]
+#[repr(C)]
 pub struct VirtqDesc {
     pub addr: u64,
     pub len: u32,
@@ -145,7 +145,7 @@ pub struct VirtqDesc {
     pub next: u16,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 pub struct VirtqAvail {
     pub flags: u16,
     pub idx: u16,
@@ -153,20 +153,20 @@ pub struct VirtqAvail {
     pub unused: u16,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 pub struct VirtqUsedElement {
     pub id: u32,
     pub len: u32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 pub struct VirtqUsed {
     pub flags: u16,
     pub idx: u16,
     pub ring: [VirtqUsedElement; QUEUE_NUM],
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct VirtqBlkReq {
     pub type_filed: u32,
@@ -174,7 +174,7 @@ pub struct VirtqBlkReq {
     pub sector: u64,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct DiskInfo {
     pub b: *mut DiskBuffer,
