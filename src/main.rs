@@ -44,6 +44,9 @@ struct StackWrapper([u8; 65536]);
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 #[no_mangle]
+static FDT_ADDR: u64 = 0;
+
+#[no_mangle]
 pub extern "C" fn main() -> ! {
     let heap_start = crate::memolayout::get_kernel_end();
     let heap_end = crate::memolayout::PHYSTOP;
@@ -53,6 +56,7 @@ pub extern "C" fn main() -> ! {
     }
     virtio::init_virtio_blk_device(memolayout::VIRTIO0 as *const u8);
     uart::console_init();
+    println!("{:x}", FDT_ADDR);
     plicinit();
     plicinithart();
     vm::kvminit();
