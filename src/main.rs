@@ -20,6 +20,7 @@ mod virtio;
 mod vm;
 
 use core::{arch::global_asm, panic::PanicInfo};
+use fdt::Fdt;
 use linked_list_allocator::LockedHeap;
 use plic::plicinithart;
 use riscv::intr_on;
@@ -54,6 +55,7 @@ pub extern "C" fn main() -> ! {
     unsafe {
         ALLOCATOR.lock().init(heap_start, heap_size);
     }
+    let fdt_inst = unsafe { Fdt::from_ptr(FDT_ADDR as *const u8).unwrap() };
     virtio::init_virtio_blk_device(memolayout::VIRTIO0 as *const u8);
     uart::console_init();
     println!("{:x}", FDT_ADDR);
