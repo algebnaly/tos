@@ -48,6 +48,9 @@ static ALLOCATOR: LockedHeap = LockedHeap::empty();
 static FDT_ADDR: u64 = 0;
 
 #[no_mangle]
+static CORE_COUNT: u64 = 0;
+
+#[no_mangle]
 pub extern "C" fn main() -> ! {
     let heap_start = crate::memolayout::get_kernel_end();
     let heap_end = crate::memolayout::PHYSTOP;
