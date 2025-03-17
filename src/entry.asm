@@ -2,11 +2,11 @@
     .section .text.entry
     .global _entry
 _entry:
-    jal ra, add_core_count
     la sp, STACK0
     li a0, 65536
     la a2, FDT_ADDR
     sd a1, 0(a2)
+    jal ra, add_core_count
     csrr a1, mhartid
     addi a1, a1, 1
     mul a0, a0, a1
