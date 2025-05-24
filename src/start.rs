@@ -14,7 +14,6 @@ extern "C" {
 #[no_mangle]
 extern "C" fn start() {
     // set M Previous Privilege mode to Supervisor, for mret.
-    println!("starting");// uart didn't get init, but it works.
     let mut x: u64 = r_mstatus();
     x &= !MSTATUS_MPP_MASK;
     x |= MSTATUS_MPP_S;

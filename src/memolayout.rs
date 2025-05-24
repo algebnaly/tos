@@ -4,6 +4,10 @@ use crate::riscv::{MAXVA, PGSIZE};
 // which describe virtual machine's memory layout.
 // we manually write this for simplicity.
 pub const UART: usize = 0x1000_0000;
+
+pub const FW_CFG: usize = 0x1010_0000;
+pub const FW_CFG_SIZE: usize = 0x18;
+
 pub const KERNELBASE: usize = 0x8000_0000;
 pub const PHYSTOP: usize = KERNELBASE + 128 * 1024 * 1024;
 

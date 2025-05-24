@@ -51,7 +51,8 @@ pub extern "C" fn main() -> ! {
     unsafe {
         ALLOCATOR.lock().init(heap_start, heap_size);
     }
-    virtio::init_virtio_blk_device(memolayout::VIRTIO0 as *const u8);
+    // virtio::init_virtio_blk_device(memolayout::VIRTIO0 as *const u8);
+    
     uart::console_init();
     plicinit();
     plicinithart();
@@ -61,7 +62,7 @@ pub extern "C" fn main() -> ! {
     trap::trapinithart();
     proc::userinit();
     intr_on();
-    virtio_disk_rw([0x75; 1024], true);
+    // virtio_disk_rw([0x75; 1024], true);
     proc::scheduler();
 }
 
