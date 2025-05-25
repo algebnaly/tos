@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 #![feature(alloc_error_handler)]
-#![feature(const_maybe_uninit_zeroed)]
 #![allow(dead_code, non_upper_case_globals)]
 
 mod mem_utils;
@@ -18,16 +17,19 @@ mod uart;
 mod utils;
 mod virtio;
 mod vm;
+mod fw_cfg;
+mod ramfb;
+
 
 use core::{arch::global_asm, panic::PanicInfo};
+use fw_cfg::{test_fw_cfg, test_iter_fwcfg};
 use linked_list_allocator::LockedHeap;
 use plic::plicinithart;
+use ramfb::{ramfb_clear, setup_ramfb, RAMFB_OK};
 use riscv::intr_on;
-use virtio::virtio_blk::virtio_disk_rw;
+extern crate alloc;
 
 use crate::plic::plicinit;
-
-extern crate alloc;
 
 global_asm!(include_str!("entry.asm"));
 global_asm!(include_str!("trampoline.asm"));
@@ -51,9 +53,9 @@ pub extern "C" fn main() -> ! {
     unsafe {
         ALLOCATOR.lock().init(heap_start, heap_size);
     }
-    // virtio::init_virtio_blk_device(memolayout::VIRTIO0 as *const u8);
-    
     uart::console_init();
+    setup_ramfb();
+    ramfb_clear(0xf0_ff_ff_00);
     plicinit();
     plicinithart();
     vm::kvminit();
@@ -73,6 +75,6 @@ fn panic(_info: &PanicInfo) -> ! {
 }
 
 #[alloc_error_handler]
-fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
+fn alloc_error_handler(layout: core::alloc::Layout) -> ! {
     panic!("allocation error: {:?}", layout);
 }

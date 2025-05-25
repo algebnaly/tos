@@ -7,6 +7,10 @@ pub const UART: usize = 0x1000_0000;
 
 pub const FW_CFG: usize = 0x1010_0000;
 pub const FW_CFG_SIZE: usize = 0x18;
+pub const FW_CFG_SELECTOR_OFFSET: usize = 8;
+pub const FW_CFG_DATA_OFFSET: usize = 0;
+pub const FW_CFG_DMA_OFFSET: usize = 16;
+
 
 pub const KERNELBASE: usize = 0x8000_0000;
 pub const PHYSTOP: usize = KERNELBASE + 128 * 1024 * 1024;
